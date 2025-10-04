@@ -131,7 +131,7 @@ app.post('/whatsapp', async (req, res) => {
     const match = incomingMsg.match(regex);
     if (!match) {
       await sendMessage(from, 'Formato inválido. Ejemplo: 20/10/2025 - 23/10/2025');
-      return res.sendStatus(200);
+      return res.status(200).end();
     }
 
     const startDate = dayjs(match[1], 'DD/MM/YYYY').format('YYYY-MM-DD');
@@ -176,7 +176,7 @@ app.post('/whatsapp', async (req, res) => {
       await sendMessage(from, `✅ Reserva confirmada\nID: ${ref.id}\nFechas: ${startDate} a ${endDate}\nAquí tienes tu confirmación en PDF:`, pdfUrl);
     }
     delete sessions[from];
-    return res.sendStatus(200);
+    return res.status(200).end();
   }
 
   // === Menú principal ===
@@ -189,7 +189,7 @@ app.post('/whatsapp', async (req, res) => {
       "3️⃣ Ofertas\n" +
       "4️⃣ Hablar con un asesor"
     );
-    return res.sendStatus(200);
+    return res.status(200).end();
   }
 
   if (msg === '1') {
@@ -222,7 +222,7 @@ app.post('/whatsapp', async (req, res) => {
     }
   }
 
-  res.sendStatus(200);
+  res.status(200).end();
 });
 
 // Health check
