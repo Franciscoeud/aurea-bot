@@ -1,0 +1,28 @@
+{
+  "name": "aurea-bot",
+  "version": "1.0.0",
+  "description": "Chatbot de reservas Aurea Stay (WhatsApp + Twilio + Firebase + Airbnb iCal)",
+  "main": "hotel-bot-server.js",
+  "type": "module",
+  "scripts": {
+    "start": "node hotel-bot-server.js",
+    "dev": "nodemon hotel-bot-server.js"
+  },
+  "dependencies": {
+    "basic-ftp": "^5.0.5",
+    "cors": "^2.8.5",
+    "dayjs": "^1.11.10",
+    "dotenv": "^16.3.1",
+    "express": "^4.19.2",
+    "firebase-admin": "^12.0.0",
+    "node-ical": "^0.21.0",
+    "pdfkit": "^0.17.2",
+    "qrcode": "^1.5.4",
+    "twilio": "^5.2.0"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.0"
+  },
+  "author": "Aurea",
+  "license": "MIT"
+}
