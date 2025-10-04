@@ -8,6 +8,7 @@ import { Readable } from 'stream';
 import PDFDocument from 'pdfkit';
 import dayjs from 'dayjs';
 import twilio from 'twilio';
+import OpenAI from 'openai';
 
 // Load environment variables
 dotenv.config();
@@ -22,6 +23,11 @@ const twilioClient = twilio(
   process.env.TWILIO_AUTH_TOKEN
 );
 const TWILIO_WHATSAPP_NUMBER = process.env.TWILIO_WHATSAPP_NUMBER;
+
+// OpenAI setup
+const openai = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
+});
 
 // Firebase setup
 if (!admin.apps.length) {
@@ -100,22 +106,18 @@ async function uploadPDFtoFTP(pdfBuffer, filename) {
 // Check availability in Firebase
 async function isRangeAvailable({ roomId, startDate, endDate }) {
   const reservasRef = db.collection('reservas');
-  const snapshot = await reservasRef
-    .where('roomId', '==', roomId)
-    .get();
+  const snapshot = await reservasRef.where('roomId', '==', roomId).get();
 
   for (let doc of snapshot.docs) {
     const data = doc.data();
-    if (
-      !(endDate < data.fechaEntrada || startDate > data.fechaSalida)
-    ) {
+    if (!(endDate < data.fechaEntrada || startDate > data.fechaSalida)) {
       return { available: false };
     }
   }
   return { available: true };
 }
 
-// WhatsApp Webhook
+// Session state
 const sessions = {};
 
 app.post('/whatsapp', async (req, res) => {
@@ -123,7 +125,7 @@ app.post('/whatsapp', async (req, res) => {
   const from = req.body.From;
   const msg = incomingMsg.toLowerCase();
 
-  // If waiting for dates
+  // === Estado: esperando fechas de reserva ===
   if (sessions[from]?.step === 'waiting_dates') {
     const regex = /(\d{2}\/\d{2}\/\d{4})\s*-\s*(\d{2}\/\d{2}\/\d{4})/;
     const match = incomingMsg.match(regex);
@@ -171,27 +173,61 @@ app.post('/whatsapp', async (req, res) => {
       const pdfFilename = `reserva-${ref.id}.pdf`;
       const pdfUrl = await uploadPDFtoFTP(pdfBuffer, pdfFilename);
 
-      await twilioClient.messages.create({
-        from: `whatsapp:${TWILIO_WHATSAPP_NUMBER}`,
-        to: from,
-        body: `✅ Reserva confirmada\nID: ${ref.id}\nFechas: ${startDate} a ${endDate}\nAquí tienes tu confirmación en PDF:`,
-        mediaUrl: [pdfUrl]
-      });
+      await sendMessage(from, `✅ Reserva confirmada\nID: ${ref.id}\nFechas: ${startDate} a ${endDate}\nAquí tienes tu confirmación en PDF:`, pdfUrl);
     }
     delete sessions[from];
     return res.sendStatus(200);
   }
 
+  // === Menú principal ===
+  if (msg === 'hola' || msg === 'menu') {
+    await sendMessage(
+      from,
+      "👋 ¡Bienvenido a La Casona Miraflores!\nPor favor selecciona una opción:\n\n" +
+      "1️⃣ Reservas\n" +
+      "2️⃣ Tours\n" +
+      "3️⃣ Ofertas\n" +
+      "4️⃣ Hablar con un asesor"
+    );
+    return res.sendStatus(200);
+  }
+
   if (msg === '1') {
     sessions[from] = { step: 'waiting_dates' };
-    await sendMessage(from, 'Por favor indícame tus fechas en el formato DD/MM/YYYY - DD/MM/YYYY');
-  } else if (msg === 'hola' || msg === 'menu') {
-    await sendMessage(from, 'Hola 👋 Opciones:\n1️⃣ Consultar disponibilidad\n2️⃣ Info check-in\n3️⃣ WiFi y cocina\n4️⃣ Hablar con humano');
+    await sendMessage(from, '📅 Por favor indícame tus fechas en el formato DD/MM/YYYY - DD/MM/YYYY');
+  } else if (msg === '2') {
+    await sendMessage(from, "🌄 Tenemos los siguientes tours:\n- City Tour Cusco\n- Valle Sagrado\n- Machu Picchu\n\n¿Quieres más info de alguno?");
+  } else if (msg === '3') {
+    await sendMessage(from, "🎁 Oferta especial: 10% de descuento en reservas de más de 3 noches.");
+  } else if (msg === '4') {
+    await sendMessage(from, "👨‍💼 En breve un asesor humano se pondrá en contacto contigo.");
   } else {
-    await sendMessage(from, 'No entendí 🙏 escribe *hola* para ver el menú.');
+    // === Fallback con OpenAI para consultas complejas ===
+    try {
+      const completion = await openai.chat.completions.create({
+        model: "gpt-4o-mini",
+        messages: [
+          {
+            role: "system",
+            content: "Eres un asistente turístico experto en Perú. Responde de forma breve y útil."
+          },
+          { role: "user", content: incomingMsg },
+        ],
+      });
+      const aiResponse = completion.choices[0].message.content;
+      await sendMessage(from, "🤖 " + aiResponse);
+    } catch (err) {
+      console.error("Error con OpenAI:", err);
+      await sendMessage(from, "Lo siento, no pude procesar tu consulta ahora.");
+    }
   }
 
   res.sendStatus(200);
+});
+
+// Health check
+app.get("/health", (req, res) => {
+  res.send("OK");
 });
 
 async function sendMessage(to, body, mediaUrl) {
