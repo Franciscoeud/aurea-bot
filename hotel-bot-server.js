@@ -9,6 +9,10 @@ import PDFDocument from 'pdfkit';
 import dayjs from 'dayjs';
 import twilio from 'twilio';
 import OpenAI from 'openai';
+import customParseFormat from 'dayjs/plugin/customParseFormat.js';
+
+// Activar plugin de dayjs
+dayjs.extend(customParseFormat);
 
 // Load environment variables
 dotenv.config();
